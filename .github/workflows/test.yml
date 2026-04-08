@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    paths:
+      - 'day1-hn-summary/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    paths:
+      - 'day1-hn-summary/**'
+      - '.github/workflows/test.yml'
+
+jobs:
+  test:
+    name: ShellCheck + Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: day1-hn-summary
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # Cache ShellCheck binary (pinned version → stable cache key)
+      # ------------------------------------------------------------------
+      - name: Cache ShellCheck
+        id: cache-shellcheck
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/shellcheck
+          key: shellcheck-0.10.0-linux-x86_64
+
+      - name: Install ShellCheck
+        if: steps.cache-shellcheck.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.local/bin
+          curl -sSL \
+            https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz \
+            | tar -xJ --strip-components=1 -C ~/.local/bin shellcheck-v0.10.0/shellcheck
+          chmod +x ~/.local/bin/shellcheck
+
+      - name: Add local bin to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # ------------------------------------------------------------------
+      # ShellCheck
+      # ------------------------------------------------------------------
+      - name: Run ShellCheck
+        run: shellcheck hn-top10.sh hn-summary.sh test.sh
+
+      # ------------------------------------------------------------------
+      # Tests
+      # ------------------------------------------------------------------
+      - name: Run tests
+        run: bash test.sh
+
+      # ------------------------------------------------------------------
+      # Slack notification on failure
+      # ------------------------------------------------------------------
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":x: CI failed on *${{ github.repository }}*",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {
+                      "title": "Branch",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Triggered by",
+                      "value": "${{ github.actor }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": false
+                    },
+                    {
+                      "title": "View run",
+                      "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
