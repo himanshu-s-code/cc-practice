@@ -1,6 +1,6 @@
 # day1-hn-summary
 
-[![CI](https://github.com/himanshu-s-code/cc-practice/actions/workflows/test.yml/badge.svg)](https://github.com/himanshu-s-code/cc-practice/actions/workflows/test.yml)
+[![CI](https://github.com/himanshu-s-code/cc-practice/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/himanshu-s-code/cc-practice/actions/workflows/test.yml)
 
 Fetches the top 10 Hacker News articles and generates a summary using the Claude CLI.
 
