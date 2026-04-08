@@ -18,11 +18,11 @@ run_section() { echo ""; echo "=== $1 ==="; }
 run_section "hn-top10.sh: help flag"
 
 output=$(bash "$HN_TOP10" --help 2>&1)
-echo "$output" | grep -q "Usage:" && pass "--help prints Usage" || fail "--help prints Usage"
-echo "$output" | grep -q "\-h" && pass "--help lists -h flag" || fail "--help lists -h flag"
+if echo "$output" | grep -q "Usage:"; then pass "--help prints Usage"; else fail "--help prints Usage"; fi
+if echo "$output" | grep -q "\-h"; then pass "--help lists -h flag"; else fail "--help lists -h flag"; fi
 
 output=$(bash "$HN_TOP10" -h 2>&1)
-echo "$output" | grep -q "Usage:" && pass "-h prints Usage" || fail "-h prints Usage"
+if echo "$output" | grep -q "Usage:"; then pass "-h prints Usage"; else fail "-h prints Usage"; fi
 
 # ---------------------------------------------------------------------------
 # hn-top10.sh — output format
@@ -33,39 +33,48 @@ echo "  (fetching live data — this may take ~30s)"
 top10_output=$(bash "$HN_TOP10" 2>/dev/null)
 exit_code=$?
 
-[ $exit_code -eq 0 ] && pass "exits with code 0" || fail "exits with code 0 (got $exit_code)"
+if [ "$exit_code" -eq 0 ]; then pass "exits with code 0"; else fail "exits with code 0 (got $exit_code)"; fi
 
-echo "$top10_output" | jq empty 2>/dev/null
-[ $? -eq 0 ] && pass "output is valid JSON" || fail "output is valid JSON"
+if echo "$top10_output" | jq empty 2>/dev/null; then
+  pass "output is valid JSON"
+else
+  fail "output is valid JSON"
+fi
 
 count=$(echo "$top10_output" | jq 'length' 2>/dev/null)
-[ "$count" -eq 10 ] && pass "returns exactly 10 articles (got $count)" || fail "returns exactly 10 articles (got $count)"
+if [ "$count" -eq 10 ]; then pass "returns exactly 10 articles (got $count)"; else fail "returns exactly 10 articles (got $count)"; fi
 
 # Each article must have id, title, url, score fields
 missing_fields=0
 for field in id title score; do
   nulls=$(echo "$top10_output" | jq "[.[] | select(.${field} == null)] | length" 2>/dev/null)
-  [ "$nulls" -eq 0 ] && pass "all articles have '$field'" || { fail "some articles missing '$field' ($nulls nulls)"; missing_fields=$((missing_fields+1)); }
+  if [ "$nulls" -eq 0 ]; then
+    pass "all articles have '$field'"
+  else
+    fail "some articles missing '$field' ($nulls nulls)"
+    missing_fields=$((missing_fields + 1))
+  fi
 done
+
 # url can be null for Ask HN / Show HN posts — just check the key exists
 has_url_key=$(echo "$top10_output" | jq 'all(.[]; has("url"))' 2>/dev/null)
-[ "$has_url_key" == "true" ] && pass "all articles have 'url' key" || fail "some articles missing 'url' key"
+if [ "$has_url_key" == "true" ]; then pass "all articles have 'url' key"; else fail "some articles missing 'url' key"; fi
 
 # id must be a number
 bad_ids=$(echo "$top10_output" | jq '[.[] | select(.id | type != "number")] | length' 2>/dev/null)
-[ "$bad_ids" -eq 0 ] && pass "all 'id' values are numbers" || fail "'id' is not a number in $bad_ids articles"
+if [ "$bad_ids" -eq 0 ]; then pass "all 'id' values are numbers"; else fail "'id' is not a number in $bad_ids articles"; fi
 
 # score must be a number
 bad_scores=$(echo "$top10_output" | jq '[.[] | select(.score | type != "number")] | length' 2>/dev/null)
-[ "$bad_scores" -eq 0 ] && pass "all 'score' values are numbers" || fail "'score' is not a number in $bad_scores articles"
+if [ "$bad_scores" -eq 0 ]; then pass "all 'score' values are numbers"; else fail "'score' is not a number in $bad_scores articles"; fi
 
 # title must be a non-empty string
 bad_titles=$(echo "$top10_output" | jq '[.[] | select(.title | type != "string" or length == 0)] | length' 2>/dev/null)
-[ "$bad_titles" -eq 0 ] && pass "all 'title' values are non-empty strings" || fail "bad 'title' in $bad_titles articles"
+if [ "$bad_titles" -eq 0 ]; then pass "all 'title' values are non-empty strings"; else fail "bad 'title' in $bad_titles articles"; fi
 
 # output must be a JSON array, not object
 is_array=$(echo "$top10_output" | jq 'type == "array"' 2>/dev/null)
-[ "$is_array" == "true" ] && pass "output is a JSON array" || fail "output is not a JSON array"
+if [ "$is_array" == "true" ]; then pass "output is a JSON array"; else fail "output is not a JSON array"; fi
 
 # ---------------------------------------------------------------------------
 # hn-top10.sh — error handling (mocked bad URL)
@@ -77,8 +86,8 @@ patched=$(sed 's|https://hacker-news.firebaseio.com/v0/topstories.json|http://12
 error_output=$(echo "$patched" | bash 2>&1)
 exit_code=$?
 
-[ $exit_code -ne 0 ] && pass "exits non-zero when top stories URL fails" || fail "should exit non-zero when top stories URL fails"
-echo "$error_output" | grep -qi "error\|failed\|warning" && pass "prints error/warning message on failure" || fail "no error/warning message printed on failure"
+if [ "$exit_code" -ne 0 ]; then pass "exits non-zero when top stories URL fails"; else fail "should exit non-zero when top stories URL fails"; fi
+if echo "$error_output" | grep -qi "error\|failed\|warning"; then pass "prints error/warning message on failure"; else fail "no error/warning message printed on failure"; fi
 
 # ---------------------------------------------------------------------------
 # hn-summary.sh — help flag
@@ -86,11 +95,11 @@ echo "$error_output" | grep -qi "error\|failed\|warning" && pass "prints error/w
 run_section "hn-summary.sh: help flag"
 
 output=$(bash "$HN_SUMMARY" --help 2>&1)
-echo "$output" | grep -q "Usage:" && pass "--help prints Usage" || fail "--help prints Usage"
-echo "$output" | grep -q "summary.md" && pass "--help mentions redirect example" || fail "--help mentions redirect example"
+if echo "$output" | grep -q "Usage:"; then pass "--help prints Usage"; else fail "--help prints Usage"; fi
+if echo "$output" | grep -q "summary.md"; then pass "--help mentions redirect example"; else fail "--help mentions redirect example"; fi
 
 output=$(bash "$HN_SUMMARY" -h 2>&1)
-echo "$output" | grep -q "Usage:" && pass "-h prints Usage" || fail "-h prints Usage"
+if echo "$output" | grep -q "Usage:"; then pass "-h prints Usage"; else fail "-h prints Usage"; fi
 
 # ---------------------------------------------------------------------------
 # hn-summary.sh — output format (mocked hn-top10.sh + mocked claude)
@@ -122,15 +131,17 @@ cp "$HN_SUMMARY" "$TMP_DIR/hn-summary.sh"
 summary_output=$(PATH="$TMP_DIR:$PATH" bash "$TMP_DIR/hn-summary.sh" 2>/dev/null)
 
 # Output checks
-[ -n "$summary_output" ] && pass "produces non-empty output" || fail "produced empty output"
-echo "$summary_output" | grep -q "$today" && pass "output contains today's date ($today)" || fail "output does not contain today's date ($today)"
-echo "$summary_output" | grep -q "#" && pass "output contains Markdown header (#)" || fail "output missing Markdown header (#)"
+if [ -n "$summary_output" ]; then pass "produces non-empty output"; else fail "produced empty output"; fi
+if echo "$summary_output" | grep -q "$today"; then pass "output contains today's date ($today)"; else fail "output does not contain today's date ($today)"; fi
+if echo "$summary_output" | grep -q "#"; then pass "output contains Markdown header (#)"; else fail "output missing Markdown header (#)"; fi
 
 # Prompt checks — verify what was sent to claude
-[ -f "$TMP_DIR/claude_stdin.txt" ] && pass "claude was invoked" || fail "claude was not invoked"
 if [ -f "$TMP_DIR/claude_stdin.txt" ]; then
-  grep -q "$today" "$TMP_DIR/claude_stdin.txt" && pass "prompt contains today's date" || fail "prompt missing today's date"
-  grep -q "Test Article" "$TMP_DIR/claude_stdin.txt" && pass "prompt contains article data" || fail "prompt missing article data"
+  pass "claude was invoked"
+  if grep -q "$today" "$TMP_DIR/claude_stdin.txt"; then pass "prompt contains today's date"; else fail "prompt missing today's date"; fi
+  if grep -q "Test Article" "$TMP_DIR/claude_stdin.txt"; then pass "prompt contains article data"; else fail "prompt missing article data"; fi
+else
+  fail "claude was not invoked"
 fi
 
 rm -rf "$TMP_DIR"
@@ -142,4 +153,4 @@ echo ""
 echo "================================"
 echo "Results: $PASS passed, $FAIL failed"
 echo "================================"
-[ $FAIL -eq 0 ] && exit 0 || exit 1
+if [ "$FAIL" -eq 0 ]; then exit 0; else exit 1; fi

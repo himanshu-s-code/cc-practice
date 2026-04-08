@@ -1,7 +1,6 @@
 #!/bin/bash
 
 categorize=false
-min_comments=0
 format="markdown"
 top10_args=()
 
@@ -28,7 +27,6 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --min-comments)
-      min_comments="$2"
       top10_args+=(--min-comments "$2")
       shift 2
       ;;
