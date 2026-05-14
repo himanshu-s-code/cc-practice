@@ -87,6 +87,20 @@ export interface Campaign {
   created_at: string;
 }
 
+export interface StockThreshold {
+  product_id: number;
+  min_quantity: number;
+  updated_at: string;
+}
+
+export interface StockAlert {
+  product_id: number;
+  sku: string;
+  name: string;
+  current_quantity: number;
+  min_quantity: number;
+}
+
 export interface Transaction {
   id: number;
   type: TransactionType;

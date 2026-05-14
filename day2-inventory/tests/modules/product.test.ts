@@ -6,7 +6,11 @@ import {
   listProducts,
   updateProduct,
 } from "../../src/modules/product.js";
-import { NotFoundError, ValidationError } from "../../src/errors.js";
+import {
+  DuplicateError,
+  NotFoundError,
+  ValidationError,
+} from "../../src/errors.js";
 
 describe("product module", () => {
   it("adds and lists products", async () => {
@@ -71,5 +75,32 @@ describe("product module", () => {
   it("throws NotFoundError when deleting missing product", async () => {
     const db = await createTestDb();
     await expect(deleteProduct(db, 999)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("throws DuplicateError when adding a product with an existing SKU", async () => {
+    const db = await createTestDb();
+    await addProduct(db, {
+      sku: "MBP-2024",
+      name: "MacBook Pro",
+      price: 298000,
+      cost: 200000,
+    });
+    await expect(
+      addProduct(db, {
+        sku: "MBP-2024",
+        name: "Different name, same SKU",
+        price: 1,
+        cost: 1,
+      }),
+    ).rejects.toBeInstanceOf(DuplicateError);
+  });
+
+  it("throws DuplicateError when updating a product to an existing SKU", async () => {
+    const db = await createTestDb();
+    await addProduct(db, { sku: "A", name: "A", price: 1, cost: 1 });
+    const b = await addProduct(db, { sku: "B", name: "B", price: 1, cost: 1 });
+    await expect(updateProduct(db, b.id, { sku: "A" })).rejects.toBeInstanceOf(
+      DuplicateError,
+    );
   });
 });

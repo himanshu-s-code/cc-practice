@@ -10,11 +10,15 @@ import {
 } from "../modules/product.js";
 import {
   createWarehouse,
+  getStockAlerts,
   getStockStatus,
   listWarehouses,
+  setStockThreshold,
   stockIn,
   stockOut,
+  transferStock,
 } from "../modules/stock.js";
+import { importProductsFromCsv } from "../modules/import.js";
 import {
   createOrder,
   listOrders,
@@ -32,10 +36,12 @@ import {
   recordTransaction,
 } from "../modules/accounting.js";
 import {
+  DuplicateError,
   InsufficientStockError,
   NotFoundError,
   ValidationError,
 } from "../errors.js";
+import type { Client } from "@libsql/client";
 
 const DB_URL = process.env.DB_URL ?? "file:inventory.db";
 
@@ -57,6 +63,24 @@ function parseFloatStrict(value: string, label: string): number {
     throw new ValidationError(`${label} must be a number`);
   }
   return n;
+}
+
+async function productIdFromSku(db: Client, sku: string): Promise<number> {
+  const res = await db.execute({
+    sql: `SELECT id FROM products WHERE sku = ?`,
+    args: [sku],
+  });
+  if (res.rows.length === 0) throw new NotFoundError("Product (sku)", sku);
+  return Number(res.rows[0].id);
+}
+
+async function warehouseIdFromName(db: Client, name: string): Promise<number> {
+  const res = await db.execute({
+    sql: `SELECT id FROM warehouses WHERE name = ?`,
+    args: [name],
+  });
+  if (res.rows.length === 0) throw new NotFoundError("Warehouse (name)", name);
+  return Number(res.rows[0].id);
 }
 
 export function buildProgram(): Command {
@@ -178,6 +202,58 @@ export function buildProgram(): Command {
           db,
           opts.productId ? parseInteger(opts.productId, "product-id") : undefined,
         ),
+      );
+    });
+  stock
+    .command("set-threshold")
+    .description("Set a minimum stock threshold for a product (by SKU)")
+    .requiredOption("--sku <sku>")
+    .requiredOption("--min <quantity>")
+    .action(async (opts) => {
+      const db = await openDb();
+      const productId = await productIdFromSku(db, opts.sku);
+      print(
+        await setStockThreshold(db, {
+          productId,
+          minQuantity: parseInteger(opts.min, "min"),
+        }),
+      );
+    });
+  stock
+    .command("alerts")
+    .description("List products whose stock is below their threshold")
+    .action(async () => {
+      const db = await openDb();
+      const alerts = await getStockAlerts(db);
+      if (alerts.length === 0) {
+        process.stdout.write("No alerts.\n");
+        return;
+      }
+      for (const a of alerts) {
+        process.stdout.write(
+          `${a.sku}: 現在在庫 ${a.current_quantity} / 最低在庫 ${a.min_quantity} - 要発注\n`,
+        );
+      }
+    });
+  stock
+    .command("transfer")
+    .description("Transfer stock between warehouses (atomic)")
+    .requiredOption("--sku <sku>")
+    .requiredOption("--from <warehouse>")
+    .requiredOption("--to <warehouse>")
+    .requiredOption("--quantity <qty>")
+    .action(async (opts) => {
+      const db = await openDb();
+      const productId = await productIdFromSku(db, opts.sku);
+      const fromId = await warehouseIdFromName(db, opts.from);
+      const toId = await warehouseIdFromName(db, opts.to);
+      print(
+        await transferStock(db, {
+          productId,
+          fromWarehouseId: fromId,
+          toWarehouseId: toId,
+          quantity: parseInteger(opts.quantity, "quantity"),
+        }),
       );
     });
 
@@ -321,6 +397,17 @@ export function buildProgram(): Command {
     print(await calculateInventoryValue(db));
   });
 
+  const importCmd = program.command("import").description("Bulk import");
+  importCmd
+    .command("products")
+    .description("Import products from a CSV file")
+    .requiredOption("--file <path>", "Path to CSV file")
+    .action(async (opts) => {
+      const db = await openDb();
+      const result = await importProductsFromCsv(db, opts.file as string);
+      print(result);
+    });
+
   return program;
 }
 
@@ -338,7 +425,8 @@ async function main() {
     if (
       err instanceof InsufficientStockError ||
       err instanceof NotFoundError ||
-      err instanceof ValidationError
+      err instanceof ValidationError ||
+      err instanceof DuplicateError
     ) {
       process.stderr.write(`${err.name}: ${err.message}\n`);
       process.exit(1);

@@ -73,6 +73,11 @@ const STATEMENTS: string[] = [
      active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0,1)),
      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
    )`,
+  `CREATE TABLE IF NOT EXISTS stock_thresholds (
+     product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
+     min_quantity INTEGER NOT NULL CHECK (min_quantity >= 0),
+     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+   )`,
   `CREATE TABLE IF NOT EXISTS transactions (
      id INTEGER PRIMARY KEY AUTOINCREMENT,
      type TEXT NOT NULL CHECK (type IN ('SALE','PURCHASE','REFUND','ADJUSTMENT')),

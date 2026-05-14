@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Client } from "@libsql/client";
-import { NotFoundError, ValidationError } from "../errors.js";
+import { DuplicateError, NotFoundError, ValidationError } from "../errors.js";
 import { toProduct } from "../db/mappers.js";
 import type { Product } from "../types.js";
 
@@ -40,12 +40,24 @@ export async function addProduct(
   input: AddProductInput,
 ): Promise<Product> {
   const data = parse(addProductSchema, input, "addProduct");
-  const res = await db.execute({
-    sql: `INSERT INTO products (sku, name, description, price, cost)
-          VALUES (?, ?, ?, ?, ?) RETURNING *`,
-    args: [data.sku, data.name, data.description ?? null, data.price, data.cost],
-  });
-  return toProduct(res.rows[0]);
+  try {
+    const res = await db.execute({
+      sql: `INSERT INTO products (sku, name, description, price, cost)
+            VALUES (?, ?, ?, ?, ?) RETURNING *`,
+      args: [data.sku, data.name, data.description ?? null, data.price, data.cost],
+    });
+    return toProduct(res.rows[0]);
+  } catch (err) {
+    if (isUniqueSkuViolation(err)) {
+      throw new DuplicateError("Product", "sku", data.sku);
+    }
+    throw err;
+  }
+}
+
+function isUniqueSkuViolation(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return /UNIQUE constraint failed: products\.sku/i.test(err.message);
 }
 
 export async function listProducts(db: Client): Promise<Product[]> {
@@ -76,10 +88,18 @@ export async function updateProduct(
   }
   sets.push(`updated_at = CURRENT_TIMESTAMP`);
   args.push(id);
-  const res = await db.execute({
-    sql: `UPDATE products SET ${sets.join(", ")} WHERE id = ? RETURNING *`,
-    args,
-  });
+  let res;
+  try {
+    res = await db.execute({
+      sql: `UPDATE products SET ${sets.join(", ")} WHERE id = ? RETURNING *`,
+      args,
+    });
+  } catch (err) {
+    if (isUniqueSkuViolation(err) && data.sku !== undefined) {
+      throw new DuplicateError("Product", "sku", data.sku);
+    }
+    throw err;
+  }
   if (res.rows.length === 0) throw new NotFoundError("Product", id);
   return toProduct(res.rows[0]);
 }

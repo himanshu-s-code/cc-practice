@@ -30,3 +30,10 @@ export class ValidationError extends Error {
     super(message);
   }
 }
+
+export class DuplicateError extends Error {
+  readonly name = "DuplicateError";
+  constructor(entity: string, field: string, value: string | number) {
+    super(`${entity} with ${field}='${value}' already exists`);
+  }
+}
